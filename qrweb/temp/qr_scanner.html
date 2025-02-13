@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QR Scanner</title>
+</head>
+<body>
+    <form method="POST">
+        {% csrf_token %}
+        <input type="hidden" name="source" id="source" value="qr_app">  <!-- ✅ Hidden identifier -->
+    
+        <h1>QR Scanner</h1>
+        <video id="video" width="400" height="300" autoplay></video>
+        <canvas id="canvas" style="display:none;"></canvas>
+        <button id="scan">Scan QR Code</button>
+        <p id="result"></p>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", () => {
+                const video = document.getElementById('video');
+                const constraints = { video: true };
+
+                navigator.mediaDevices.getUserMedia(constraints)
+                    .then((stream) => {
+                        video.srcObject = stream;
+                        console.log("Camera access granted.");
+                    })
+                    .catch((err) => {
+                        console.error("Camera access denied!", err);
+                        alert("Please allow camera access.");
+                    });
+            });
+
+            document.getElementById('scan').addEventListener('click', (event) => {
+                event.preventDefault();  // Prevent form submission
+
+                const canvas = document.getElementById('canvas');
+                const video = document.getElementById('video');
+                const result = document.getElementById('result');
+                const context = canvas.getContext('2d');
+                const source = document.getElementById('source').value;  // ✅ Get the identifier
+                
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/png');
+
+                console.log("Sending image to server...");
+
+                fetch('/redirect/', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': document.querySelector('[name=csrfmiddlewaretoken]').value
+                    },
+                    body: new URLSearchParams({ 
+                        'image': imageData,
+                        'source': source  // ✅ Send source identifier
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Server Response:", data);
+                    if (data.status === 'success') {
+                        result.innerHTML = `QR Code URL: <a href="${data.url}" target="_blank">${data.url}</a>`;
+                    } else {
+                        result.innerText = "No QR Code detected.";
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+            });
+        </script>
+    </form>
+</body>
+</html>
